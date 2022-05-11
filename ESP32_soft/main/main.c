@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -36,7 +38,28 @@
 #define AIN2                        0b00110000
 #define AIN3                        0b00111000
 
-const uint8_t data_reg[3]={CONFIG_REGISTER,SamplePerSecond_128,_4096V_Input|AIN0};
+//Config register Example
+#define CONF_1_1                    0b10010000                  //first 7-bit I2c address followed by a low read/write bit
+#define CONF_1_2                    0b00000001                  //Points to Config register
+#define CONF_1_3                    0b10000100                  //MSB of the Config register to be written
+#define CONF_1_4                    0b10000011                  //LSB of the Config register to be written
+
+uint8_t data_1[3]={CONF_1_2, CONF_1_3, CONF_1_4};
+
+//Write to Pointer register
+#define CONF_2_1                    0b10010000                  //first 7-bit I2c address followed by a low read/write bit
+#define CONF_2_2                    0b00000000                  //points to Conversion regitster
+
+uint8_t data_2[1]={CONF_2_2};
+
+//Read Conversion register
+#define CONF_3_1                    0b10010001                  //first 7-bit I2c address followed by a low read/write bit
+
+
+#define SCALE                       6.144/65535
+
+
+const uint8_t data_reg[2]={SamplePerSecond_128,_4096V_Input|AIN0};
 static const char *TAG = "i2c-testowa-komunikacja";
 
 static esp_err_t i2c_master_init(void)
@@ -57,27 +80,35 @@ static esp_err_t i2c_master_init(void)
     return i2c_driver_install(i2c_master_port, conf.mode, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, INTR_ALLOC_FLAGS);
 }
 
-static esp_err_t i2c_read_byte(const uint8_t reg_addr,size_t len_reg, uint8_t *data, size_t len)
-{
-    return i2c_master_write_read_device(I2C_MASTER_NUM, I2C_SLAVE_ADDRESS, &reg_addr, len_reg, data, len, (I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
-}
 
 void app_main(void)
 {
-    uint8_t data[20];
-    uint8_t temp=0;
+    uint8_t size_data=2;
+    uint8_t data[size_data];
+    //char * pKoniec;
+    bool state;
+    float Voltage=0;
 
     ESP_ERROR_CHECK(i2c_master_init());
     ESP_LOGI(TAG, "I2C initialized successfully");
 
-    ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_read_byte(I2C_WHO_I_AM_REG,1,data,20));
+    state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS,data_1,sizeof(data_1),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+
+    state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS,data_2,sizeof(data_2),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
     
-    while(temp<20)
-    {
-        ESP_LOGI(TAG, "Message%d: %X",temp, data[temp]);
-        temp++;
+    state=i2c_master_read_from_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS,data,sizeof(data),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+
+    if(state==0)
+        {
+        for(int i=0;i<size_data;i++)
+        {
+            ESP_LOGI(TAG, "Message%d: dec:%X  hex:%d",i, data[i], data[i]);
+        }
+        
+        Voltage =(data[0]*256+data[1])*SCALE;
+        ESP_LOGI(TAG, "Voltage: %f",Voltage);
+    
     }
-    
 
     while(1)
     {
