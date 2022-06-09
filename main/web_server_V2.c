@@ -49,7 +49,8 @@ static const char *TAG = "SAW_Project";
 #define INTR_ALLOC_FLAGS            0                          /*Flags used to allocate the interrupt*/
 
 #define I2C_MASTER_TIMEOUT_MS       1000
-#define I2C_SLAVE_ADDRESS           0x48                        /*IF ADDR pino of GY-ADS1115 is connected to ground*/
+#define I2C_SLAVE_ADDRESS_ADC1      0x48                        /*IF ADDR pino of GY-ADS1115 is connected to ground*/
+#define I2C_SLAVE_ADDRESS_ADC2      0x49
 #define I2C_WHO_I_AM_REG            0x00
 
 #define VoltPerBit                  187.5*0.000001
@@ -67,10 +68,10 @@ static const char *TAG = "SAW_Project";
 #define AIN3                        0b01110000
 
 //Config register Example
-#define CONF_1_1                    0b10010000                  //first 7-bit I2c address followed by a low read/write bit
 #define CONF_1_2                    0b00000001                  //Points to Config register
 #define CONF_1_3                    0b10000010                  //MSB of the Config register to be written
 #define CONF_1_4                    0b10000011                  //LSB of the Config register to be written
+
 
 uint8_t data_1_AIN0[3]={CONF_1_2, CONF_1_3|AIN0, CONF_1_4};
 uint8_t data_1_AIN1[3]={CONF_1_2, CONF_1_3|AIN1, CONF_1_4};
@@ -94,33 +95,61 @@ uint8_t data_2[1]={CONF_2_2};
 #define I2C_MASTER_WRITE            0
 #define I2C_MASTER_READ             1
 
+#define Voltage_to_Current          50/4.096
 
-char * Read_ADC_V(int pin)
+char * Read_ADC_V(int pin, int ADC)
 {
-    bool state;
+    bool state=1;
     float Voltage=0;
     char * buffer=(char *)malloc(sizeof(char)*8);
     
-    switch(pin)
+    switch(ADC)
     {
-        case 1:
-            state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS,data_1_AIN0,sizeof(data_1_AIN0),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
-        break;
-        case 2:
-            state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS,data_1_AIN1,sizeof(data_1_AIN0),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
-        break;
-        case 3:
-            state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS,data_1_AIN2,sizeof(data_1_AIN0),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
-        break;
-        default:
-        return 0;
+    case 1:
+            switch(pin)
+            {
+                case 1:
+                    state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC1,data_1_AIN0,sizeof(data_1_AIN0),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+                break;
+                case 2:
+                    state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC1,data_1_AIN1,sizeof(data_1_AIN0),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+                break;
+                case 3:
+                    state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC1,data_1_AIN2,sizeof(data_1_AIN0),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+                break;
+                default:
+                return 0;
+            }
+            state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC1,data_2,sizeof(data_2),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+            state=i2c_master_read_from_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC1,data_ADC,sizeof(data_ADC),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+
+    break;
+
+    case 2:
+            switch(pin)
+            {
+                case 1:
+                    state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC2,data_1_AIN0,sizeof(data_1_AIN0),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+                break;
+                case 2:
+                    state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC2,data_1_AIN1,sizeof(data_1_AIN0),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+                break;
+                case 3:
+                    state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC2,data_1_AIN2,sizeof(data_1_AIN0),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+                break;
+                default:
+                return 0;
+            }
+            state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC2,data_2,sizeof(data_2),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+            state=i2c_master_read_from_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS_ADC2,data_ADC,sizeof(data_ADC),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
+    break;
+    default:
+    break;
     }
 
-    state=i2c_master_write_to_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS,data_2,sizeof(data_2),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
-    state=i2c_master_read_from_device(I2C_MASTER_NUM,I2C_SLAVE_ADDRESS,data_ADC,sizeof(data_ADC),(I2C_MASTER_TIMEOUT_MS/portTICK_PERIOD_MS));
-
+    
     if(state==0)
-        {
+    {
         for(int i=0;i<2;i++)
         {
             ESP_LOGI(TAG, "Message%d: dec:%X  hex:%d",i, data_ADC[i], data_ADC[i]);
@@ -138,6 +167,22 @@ char * Read_ADC_V(int pin)
             return 0;
         }
     }
+    return 0;
+}
+
+char * Read_ADC_C(int pin, int ADC)
+{
+    char * buffer = (char *) malloc(sizeof(char)*8);
+    strcpy(buffer,Read_ADC_V(pin,ADC));
+    float voltage = atof(buffer);
+    voltage *= Voltage_to_Current;
+
+    if(snprintf(buffer, 8, "%f", voltage))
+        return buffer;
+
+    else
+            ESP_LOGI(TAG,"Problem z snprintf");
+
     return 0;
 }
 
@@ -160,7 +205,7 @@ static esp_err_t i2c_master_init(void)
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//////////////////////////////SPIFFS///////////////////////////////////
+//////////////////////////////////////////////////////SPIFFS///////////////////////////////////
 
 
 static void read_hello_txt(void)
@@ -308,32 +353,32 @@ static esp_err_t file_root_handler(httpd_req_t *req)
     {
         //L1V
         case 1:
-            httpd_resp_send(req,Read_ADC_V(1), 8*sizeof(char));
-            return ESP_OK;
-        break;
-        //L1C
-        case 2:
-            httpd_resp_send(req,Read_ADC_V(2), 8*sizeof(char));
+            httpd_resp_send(req,(const char *)Read_ADC_V(1,1), 8*sizeof(char));
             return ESP_OK;
         break;
         //L2V
-        case 3:
-            httpd_resp_send(req,Read_ADC_V(3), 8*sizeof(char));
-            return ESP_OK;
-        break;
-        //L2C
-        case 4:
-            httpd_resp_send(req,"69", 2);
+        case 2:
+            httpd_resp_send(req,(const char *)Read_ADC_V(2,1), 8*sizeof(char));
             return ESP_OK;
         break;
         //L3V
+        case 3:
+            httpd_resp_send(req,(const char *)Read_ADC_V(3,1), 8*sizeof(char));
+            return ESP_OK;
+        break;
+        //L1C
+        case 4:
+            httpd_resp_send(req,(const char *)Read_ADC_V(1,2), 8*sizeof(char));
+            return ESP_OK;
+        break;
+        //L2C
         case 5:
-            httpd_resp_send(req,"69", 2);
+            httpd_resp_send(req,(const char *)Read_ADC_V(2,2), 8*sizeof(char));
             return ESP_OK;
         break;
         //L3C
         case 6:
-            httpd_resp_send(req,"69", 2);
+            httpd_resp_send(req,(const char *)Read_ADC_V(3,2), 8*sizeof(char));
             return ESP_OK;
         break;
         //Fi
