@@ -383,7 +383,7 @@ static esp_err_t file_root_handler(httpd_req_t *req)
         break;
         //Fi
         case 7:
-            httpd_resp_send(req,"69", 2);
+            httpd_resp_send(req,"00", 2);
             return ESP_OK;
         break;
 
